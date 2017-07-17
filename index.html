@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+<!-- Example based on http://bl.ocks.org/mbostock/3887118 -->
+<!-- Tooltip example from http://www.d3noob.org/2013/01/adding-tooltips-to-d3js-graph.html -->
+<!-- Coding style based on http://gist.github.com/mbostock/5977197 -->
+
+<style>
+body {
+  font: 10px sans-serif;
+}
+.line {
+    stroke: #E4002B;
+    fill: none;
+    stroke-width: 2;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.dot {
+  stroke: #000;
+}
+
+.tooltip {
+  position: absolute;
+  width: 200px;
+  height: 28px;
+  pointer-events: none;
+}
+</style>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+<script>
+var regression;
+var data_st = ["ALL", 
+               "Alabama", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", 
+               "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", 
+               "Iowa", "Kansas", "Kentucky", "Maine", "Maryland", "Massachusetts", 
+               "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", 
+               "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", 
+               "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", 
+               "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", 
+               "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", 
+               "West Virginia", "Wisconsin", "Wyoming"];
+
+var sub_state;
+var f_data = [];
+
+// ---------------- load data start
+d3.csv("js_county.csv", function(data) {
+
+  // change string (from CSV) into number format
+    return {
+	    County: data.County,
+	    CountyCode: data.CountyCode,
+	    State: data.State,
+	    StateCode: data.StateCode,
+	    //Year: new Date(+data.Year, 0, 1), // convert "Year" column to Date
+	    Year: +data["Year"],
+	    DisabledWorkers: +data["DisabledWorkers"],
+	    TotalLabor: +data["TotalLabor"],
+	    UnemploymentRate: +data["UnemploymentRate"],
+	    Unemployed: +data["Unemployed"],
+    //d["DisabledWorkers"] = +d["DisabledWorkers"];
+    //d["TotalLabor"] = +d["TotalLabor"];
+    //d["UnemploymentRate"] = +d["UnemploymentRate"];
+    //d["Unemployed"] = +d["Unemployed"];
+    //if (sub_state) { datafilter(); }
+    };
+}, function(data) { 		// scope ends at the script end
+	f_data = data;
+	console.log(f_data[0]);
+	console.log(f_data[f_data.length - 1]);
+
+	//});
+	// ---------------- load data
+	var margin = {top: 20, right: 20, bottom: 30, left: 40},
+	    width = 760 - margin.left - margin.right,
+	    height = 750 - margin.top - margin.bottom;
+	
+	// ------------------- Selection box start
+		// ------------------- Build selections
+    var yearselection = ["ALL"];
+	var sub_year;
+	for(i = 0; i < f_data.length; i++) { 
+   		//d = f_data[i]["Year"];            // use if year is date type
+		//if(idx = yearselection.map(Number).indexOf(+d) == -1) {
+		//console.log(idx);
+		//console.log( f_data[i]["Year"])
+		if(yearselection.indexOf(f_data[i]["Year"]) === -1){
+	   		yearselection.push(f_data[i]["Year"]);
+		}	
+	};
+    console.log(yearselection);
+		// ------------------- Build selections
+
+	function onchange() {
+		//sub_state = d3.select('select').property('value')
+	    //f_data = data.filter(function(d){ return d["State"] == sub_state; })
+		//console.log(sub_state)
+		sub_year = d3.select('select').property('value')
+		if (sub_year == "ALL") {		
+	    	f_data = data;
+		} else {
+	    	f_data = data.filter(function(d){ return d["Year"] == sub_year; });
+		}
+		console.log(sub_year);
+	    console.log(f_data);
+		render_chart();
+	};
+	
+	var dataNested = d3.nest()
+	  .key(function (d) { return d; })
+	  .sortKeys(d3.descending)
+	  //.entries(data_st)
+	  .entries(yearselection.sort(d3.ascending));
+	
+	d3.select('body').append('div')
+	  .append('select')
+	    .on('change',onchange)
+	  .selectAll('option')
+	  .data(dataNested)
+	  .enter()
+	  .append('option')
+	    .attr('value',function (d) { return d.key })
+	    .text(function (d) { return d.key })
+	
+	var dataFiltered = dataNested.filter(function (d) { console.log("ALL"); return d.key === 'ALL';})
+	
+	// ------------------- Selection box end
+	
+	// setup fill color
+	var cValue = function(d) { return d.Manufacturer;},
+	    color = d3.scale.category10();
+	
+	// add the graph canvas to the body of the webpage
+	var svg = d3.select("body").append("svg")
+	    .attr("width", width + margin.left + margin.right)
+	    .attr("height", height + margin.top + margin.bottom)
+	  .append("g")
+	    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+	
+	// add the tooltip area to the webpage
+	var tooltip = d3.select("body").append("div")
+	    .attr("class", "tooltip")
+	    .style("opacity", 0);
+	
+	
+	// ---------------- filter data
+	  function datafilter(d){
+		//data = data.filter(function(d) { return d["State"] == sub_state;});
+		data = data.filter(function(d) { return d["Year"] == sub_year;});
+		return data;
+	  };
+	
+	// ---------------- filter data
+	// ****************** the render part *********************************
+	function render_chart() {	
+				
+		  // Regression ---------------------------- start
+			//var XaxisData = data.map(function(d) { return d["UnemploymentRate"]; });
+			//var YaxisData = data.map(function(d) { return d["DisabledWorkers"] / d["TotalLabor"]; });
+			var XaxisData = f_data.map(function(d) { return d["UnemploymentRate"]; });
+			var YaxisData = f_data.map(function(d) { return d["DisabledWorkers"] / d["TotalLabor"]; });
+			regression=leastSquaresequation(XaxisData,YaxisData);
+		
+			function leastSquaresequation(XaxisData, Yaxisdata) {
+		    		var ReduceAddition = function(prev, cur) { return prev + cur; };
+		    
+				// finding the mean of Xaxis and Yaxis data
+				var xBar = XaxisData.reduce(ReduceAddition) * 1.0 / XaxisData.length;
+				var yBar = Yaxisdata.reduce(ReduceAddition) * 1.0 / Yaxisdata.length;
+		
+				var SquareXX = XaxisData.map(function(d) { return Math.pow(d - xBar, 2); })
+					.reduce(ReduceAddition);
+		    
+				var ssYY = Yaxisdata.map(function(d) { return Math.pow(d - yBar, 2); })
+					.reduce(ReduceAddition);
+		      
+				var MeanDiffXY = XaxisData.map(function(d, i) { return (d - xBar) * (Yaxisdata[i] - yBar); })
+					.reduce(ReduceAddition);
+		      
+				var slope = MeanDiffXY / SquareXX;
+				var intercept = yBar - (xBar * slope);
+		    
+				// returning regression function
+				return function(x){
+					return x*slope+intercept
+				}
+		
+			}
+			var line = d3.svg.line()
+				//.x(function(d) { return x(d["UnemploymentRate"]); })
+				//.y(function(d) { return y(regression(d["UnemploymentRate"])); });
+				.x(function(d) { return xScale(d["UnemploymentRate"]); })
+				.y(function(d) { return yScale(regression(d["UnemploymentRate"])); });
+		
+		  // Regression ---------------------------- end
+
+		/* 
+		 * value accessor - returns the value to encode for a given data object.
+		 * scale - maps value to a visual display encoding, such as a pixel position.
+		 * map function - maps from data value to display value
+		 * axis - sets up axis
+		 */ 
+		
+		// setup x 
+		//var xValue = function(d) { return d.Calories;}, // data -> value
+		var xValue = function(d) { return d["UnemploymentRate"]; }, // data -> value
+		    xScale = d3.scale.linear().range([0, width]), // value -> display
+		    xMap = function(d) { return xScale((xValue(d)));}, // data -> display 
+		    xAxis = d3.svg.axis().scale(xScale)
+		                         .tickFormat(function(v) { return Math.round(100 * v) + "%";}) 
+			                 .orient("bottom");
+		
+		// setup y
+		//var yValue = function(d) { return d["Protein (g)"];}, // data -> value
+		console.log("setting up y");
+		var yValue = function(d) { return d["DisabledWorkers"] / d["TotalLabor"]; }, // data -> value
+		    yScale = d3.scale.linear().range([height, 0]), // value -> display
+		    yMap = function(d) { return yScale(yValue(d));}, // data -> display
+		    yAxis = d3.svg.axis().scale(yScale)
+		                         .tickFormat(function(v) { return Math.round(100 * v) + "%";}) 
+			                 .orient("left");
+
+
+		  // don't want dots overlapping axis, so add in buffer to data domain
+		  //xScale.domain([d3.min(data, xValue)-1, d3.max(data, xValue)+1]);
+		  //yScale.domain([d3.min(data, yValue)-1, d3.max(data, yValue)+1]);
+		  /*
+		  if ( d3.max(data, xValue) > d3.max(data, yValue)) { 
+		  	xScale.domain([0, d3.max(data, xValue)+.01]);
+		  	yScale.domain([0, d3.max(data, xValue)+.01]);
+		  } else {
+		  	xScale.domain([0, d3.max(data, yValue)+.01]);
+		  	yScale.domain([0, d3.max(data, yValue)+.01]);
+		  }
+		  */
+	
+	
+		  if ( d3.max(f_data, xValue) > d3.max(f_data, yValue)) { 
+		  	xScale.domain([0, d3.max(f_data, xValue)+.01]);
+		  	yScale.domain([0, d3.max(f_data, xValue)+.01]);
+		  } else {
+		  	xScale.domain([0, d3.max(f_data, yValue)+.01]);
+		  	yScale.domain([0, d3.max(f_data, yValue)+.01]);
+		  }
+		
+		
+		  // x-axis
+		  svg.selectAll("#tempx").remove();
+		  svg.append("g")
+		      .attr("class", "x axis")
+			  .attr("id", "tempx")                     
+		      .attr("transform", "translate(0," + height + ")")
+		      .call(xAxis)
+		    .append("text")
+		      .attr("class", "label")
+		      .attr("x", width)
+		      .attr("y", -6)
+		      .style("text-anchor", "end")
+		      .text("Unemployment Rate");
+		
+		  // y-axis
+		  svg.selectAll("#tempy").remove();
+		  svg.append("g")
+		      .attr("class", "y axis")
+			  .attr("id", "tempy")                     
+		      .call(yAxis)
+		    .append("text")
+		      .attr("class", "label")
+		      .attr("transform", "rotate(-90)")
+		      .attr("y", 6)
+		      .attr("dy", ".71em")
+		      .style("text-anchor", "end")
+		      .text("Disability % of Labor");
+		  svg.select(".y axis").transition().call(yAxis);
+		
+		  // draw dots
+		  console.log("drawing dots");
+		  console.log("xMap: " + xMap);
+		  console.log("yMap: " + yMap);
+		  svg.selectAll(".dot")
+		      //.data(data)
+		      .data(f_data)
+		    .enter().append("circle");
+		  svg.selectAll("circle").data(f_data).exit().remove();
+		  svg.selectAll("circle").data(f_data)
+		      .attr("class", "dot")
+		      .attr("r", 0.75)
+		      .attr("cx", xMap)
+		      .attr("cy", yMap)
+		      .style("stroke", "blue")
+		      .style("fill", "blue") 
+		      .on("mouseover", function(d) {
+		          tooltip.transition()
+		               .duration(200)
+		               .style("opacity", .9);
+		          tooltip.html(d["County"] + "<br/> (" + xValue(d) 
+			        + ", " + yValue(d) + ")")
+		               .style("left", (d3.event.pageX + 5) + "px")
+		               .style("top", (d3.event.pageY - 28) + "px");
+		      })
+		      .on("mouseout", function(d) {
+		          tooltip.transition()
+		               .duration(500)
+		               .style("opacity", 0);
+		      });
+		
+		      // Regresion ----------------- start
+		  svg.select("#rline").remove();
+		  svg.append("path")
+		      //.datum(data)
+		      .datum(f_data)
+		      .attr("class", "line")
+		      .attr("d", line)
+		      .attr("id", "rline")
+		      .on("mousemove",function(){
+		        d3.select(".tooltip").style("left",function(d){return (d3.event.pageX+10)+"px"}).style("top",function(d){ return (d3.event.pageY-50)+"px"});
+		        d3.select(".tooltip").style("visibility","visible");
+		        EstDisable=parseFloat(regression(xScale.invert(d3.event.pageX-svg.node().getBoundingClientRect().left-margin.left))).toFixed(3);
+		        d3.select(".tooltip").text("Estimated disability is "+EstDisable)
+		        
+		      })
+		      .on("mouseout",function(){
+		          d3.select(".tooltip").style("visibility","hidden");
+		      });
+		      
+		      // Regresion ----------------- end
+		
+		/*
+		  // draw legend
+		  console.log("drawing legend");
+		  var legend = svg.selectAll(".legend")
+		      .data(color.domain())
+		    .enter().append("g")
+		      .attr("class", "legend")
+		      .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+		
+		  // draw legend colored rectangles
+		  legend.append("rect")
+		      .attr("x", width - 18)
+		      .attr("width", 18)
+		      .attr("height", 18)
+		      .style("fill", color);
+		
+		  // draw legend text
+		  legend.append("text")
+		      .attr("x", width - 24)
+		      .attr("y", 9)
+		      .attr("dy", ".35em")
+		      .style("text-anchor", "end")
+		      .text(function(d) { return d;})
+		*/
+	} 			// end render_chart
+	render_chart();
+});
+// ---------------- load data
+</script>
+</body>
+</html>
