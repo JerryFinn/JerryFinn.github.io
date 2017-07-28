@@ -1,0 +1,266 @@
+<!DOCT/YPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1"/>
+    <title>Correlation by State</title>
+
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    <script src="http://d3js.org/topojson.v1.min.js"></script>
+    <script src="http://d3js.org/d3.geo.projection.v0.min.js"></script>
+
+    <style>
+        .states {
+            fill: none;
+            stroke: grey;
+            stroke-linejoin: round;
+        }
+
+		.tooltip {
+			position: absolute;
+  			width: 200px;
+  			height: 28px;
+  			pointer-events: none;
+		}
+		body {
+  			font: 12px arial;
+		}
+			.line {
+   			 stroke: #E4002B;
+    		fill: none;
+    		stroke-width: 2;
+		}
+			.legend {
+  			font-size: 10px;
+		}
+    </style>
+</head>
+
+<body>
+
+	<h1>Correlation by State</h1>
+	<sub><font color="red"> Note: No data for Alaska and Louisiana </font></sub>
+	<div>
+		<p>Next we try and look at this regionally by looking at the states on a choropleth scene. 
+		Here we use a gradual color scale to represent continuous variables. We plot the correlation coefficient from -1 (red) to 1 (green). </p> 
+		<p>
+		We calculated coorelation and also p-value to see if our finding is statistically 
+	       signifigant. The user can mouse over any state and this will trigger an annotation 
+	       that will show the state name, the exact coorelation, and the p-value up to 3 significant 
+       	       digits.</p> 
+	       <p>The default is using all years as data points. The user can explore on a year by 
+	       year basis by using the pull down box to set a parameter to a specific year and trigger
+	      the map to re-render. </p>
+	      <p> 
+		We see consistently that most states have a positive correlation, but the relation
+	       tend to be closer to 0 than to 1. Therefore, we don't see any strong national or 
+	       many state trends. When the user mouses over the states, we will see although 
+	       coorelations are not strong, the p-value tend to be 0 (to 3 digits), indicating
+	       that although trends are weak, we are nonetheless confident that they exist. 
+	       </p>
+	       <p>
+	       But since looking at data at a point in time is just a snap shot, we will proceed to 
+	       more of a time series approach in our next scene and look at trend lines. 
+	       </p>
+	</div>
+		
+	
+<div>Next Slide: <a href="final.v3.trend.html"> Trend lines</a> </div>
+
+<p> </p>
+
+
+<script type="text/javascript">
+
+StateCodes = {1: "Alabama", 2: "Alaska", 4: "Arizona", 5: "Arkansas", 6: "California",
+	8: "Colorado", 9: "Connecticut", 10: "Delaware", 12: "Florida", 13: "Georgia",
+	15: "Hawaii", 16: "Idaho", 17: "Illinois", 18: "Indiana", 19: "Iowa",
+	20: "Kansas", 21: "Kentucky", 22: "Louisiana", 23: "Maine", 24: "Maryland",
+	25: "Massachusetts", 26: "Michigan", 27: "Minnesota", 28: "Mississippi",
+	29: "Missouri", 30: "Montana", 31: "Nebraska", 32: "Nevada",
+	33: "New Hampshire", 34: "New Jersey", 35: "New Mexico", 36: "New York",
+	37: "North Carolina", 38: "North Dakota", 39: "Ohio", 40: "Oklahoma",
+	41: "Oregon", 42: "Pennsylvania", 44: "Rhode Island", 45: "South Carolina",
+	46: "South Dakota", 47: "Tennessee", 48: "Texas", 49: "Utah",
+	50: "Vermont", 51: "Virginia", 53: "Washington", 54: "West Virginia",
+	55: "Wisconsin", 56: "Wyoming"}
+	
+	var margin = {top: 40, right: 40, bottom: 40, left: 40};
+    var width = 960,
+        height = 500 + margin.bottom;
+
+	var legend_labels = ["-1 to -0.8", "-0.8 to -0.6", "-0.6 to -0.4", "-0.4 to -0.2", "-0.2 to 0", 
+	                     "0 to 0.2", "0.2 to 0.4", "0.4 to 0.6", "6.0 to 0.8", "0.8 to 1"];
+    var color_domain = [-0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8];
+    var ext_color_domain = [-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8];
+
+    var color = d3.scale.threshold()
+            .domain(color_domain) // <-A
+            .range([ "#ff0000", "#ff3333", "#ff6666", "#ff9999", "#ffe6e6", "#ccffcc", "#80ff80", "#33ff33", "#00cc00", "#008000"]);
+
+	var corrByState = {};
+	var pByState = {};
+	var nameState = {};
+	var sub_year = 'ALL';
+	var x_array = [];
+	var y_array = [];
+
+    d3.json("us.json", function (error, us) {
+        d3.csv("js_correlation.csv", function (js_correlation) {
+			return {
+			    id: js_correlation.id,
+			    Year: +js_correlation["Year"],
+			    Pvalue: +js_correlation.Pvalue,
+			    slope: +js_correlation.slope,
+			    correlation: +js_correlation.correlation
+		    };
+		}, function(js_correlation) {	
+
+			// ------------------- Build selections
+		    var yearselection = ["ALL"];
+			var sub_year;
+			for(i = 0; i < js_correlation.length; i++) { 
+				if(yearselection.indexOf(js_correlation[i]["Year"]) === -1){
+					if(js_correlation[i]["Year"] != 9999){
+			   			yearselection.push(js_correlation[i]["Year"]);
+					}	
+				}	
+			};
+		    //console.log(yearselection);
+			// ------------------- Build selections
+
+		    mutableData = js_correlation.filter(function(d){ return d["Year"] == 9999; });
+			function onchange() {
+				sub_year = d3.select('select').property('value')
+				if (sub_year == "ALL") {		
+				   	mutableData = js_correlation.filter(function(d){ return d["Year"] == 9999; });
+				} else {
+				   	mutableData = js_correlation.filter(function(d){ return d["Year"] == sub_year; });
+				}
+            	mutableData.forEach(function (d) { corrByState[d.id] = +d.correlation; });
+				render_chart();
+			};	
+			
+			//console.log(mutableData);			// debug
+
+			// ------------------- Selection box start
+			var dataNested = d3.nest()
+			  .key(function (d) { return d; })
+			  .sortKeys(d3.descending)
+			  .entries(yearselection.sort(d3.ascending));
+			
+			d3.select('body').append('div')
+			  .append('select')
+			    .on('change',onchange)
+			  .selectAll('option')
+			  .data(dataNested)
+			  .enter()
+			  .append('option')
+			    .attr('value',function (d) { return d.key })
+			    .text(function (d) { return d.key })
+			// ------------------- Selection box end
+
+							
+			// ------------------- set up general drawing area - start
+			// ------------------- NOTE: This is after the selection box is draw
+		    var path = d3.geo.path();
+		
+		    var svg = d3.select("body").append("svg")
+		            .attr("width", width)
+		            .attr("height", height);
+		
+			/* Extra not needed ????
+		    var g = svg.append("g")
+		            .call(d3.behavior.zoom()
+		            .scaleExtent([1, 10])
+		            .on("zoom", zoom));
+			*/
+			// add the tooltip area to the webpage
+			var tooltip = d3.select("body").append("div")   
+  				.attr("class", "tooltip")               
+  				.style("opacity", 0);
+			// ------------------- set up general drawing area - end
+
+            mutableData.forEach(function (d) { // <-B
+                corrByState[d.id] = +d.correlation;
+				pByState[d.id] = +d.Pvalue;
+				nameState[d.id] = d.StateCodes;
+            });
+
+			//console.log(corrByState);			// debug
+			//console.log("---------");			// debug
+			//console.log(us);					// debug
+			//console.log(us.properties);					// debug
+			
+			// ****************** the render part *********************************
+
+			function render_chart() {	
+				
+	            svg.append("g")
+	                    .attr("class", "states")
+	                    .selectAll("path")
+	                    .data(topojson.feature(us, us.objects.states).features)
+	                    .enter().append("path")
+	                    	.attr("d", path)
+	                    	.style("fill", function (d) {
+	                        	return color(corrByState[d.id]); // <-C
+	                    	})
+						//Adding mouseevents
+						.on("mouseover", function(d) {
+							tooltip.transition()
+		               			.duration(200)
+		               			.style("opacity", .9);
+							tooltip.html( StateCodes[d.id] + "<br/>" +
+										"Correlation: " + corrByState[d.id] + "<br/>" +
+								   		"P-Value: " + pByState[d.id] )
+		               			.style("left", (d3.event.pageX + 5) + "px")
+		               			.style("top", (d3.event.pageY - 28) + "px");
+						})
+						.on("mouseout", function() {
+		          			tooltip.transition()
+		               			.duration(500)
+		               			.style("opacity", 0);
+						}) ;
+	
+	            //g.append("path")
+	            svg.append("path")
+	                    .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+	                    .attr("class", "states")
+	                    .attr("d", path);
+
+
+				//Adding legend for our Choropleth
+				
+				var legend = svg.selectAll("g.legend")
+				  .data(ext_color_domain)
+				  .enter().append("g")
+				  .attr("class", "legend");
+				
+				var ls_w = 20, ls_h = 20;
+				
+				legend.append("rect")
+				  .attr("x", 20)
+				  .attr("y", function(d, i){ return height - 40 - (i*ls_h) - 2*ls_h;})
+				  .attr("width", ls_w)
+				  .attr("height", ls_h)
+				  .style("fill", function(d, i) { if(i != 11) {return color(d);} else {return "white";} })
+				  //.style("opacity", 0.8)
+				  ;
+				
+				legend.append("text")
+				  .attr("x", 50)
+				  .attr("y", function(d, i){ return height - 40 - (i*ls_h) - ls_h - 4;})
+				  .text(function(d, i){ return legend_labels[i]; });
+				  //.text("Testing");
+				  //.text(function(d, i){ return [i]; });
+
+			};	
+			render_chart();
+        });
+    });
+
+</script>
+
+</body>
+
+</html>

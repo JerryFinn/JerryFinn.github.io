@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<title>Trend Lines</title>
+<style> /* set the CSS */
+
+body { font: 12px Arial;}
+
+path { 
+    stroke: steelblue;
+    stroke-width: 2;
+    fill: none;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+</style>
+<body>
+
+<h1> Unemployment, Disability Rates Trends During the Crisis</h1>
+
+	<div>
+		<p>
+		Observations in previous scenes might be a result of affects accumulated over time and not reveal treads. 
+		For this scene we look at the trend lines. 
+		</p> 
+		<p>
+		Here we see unemployment trends in the green line and disability in the red line.
+	        The annotaion is not interactive on this scene. We merely identify which trend line is which 
+	        with text after each line. Since the years are already on the chart our drill down 
+	        parameters are states rather than years. When a user chooses a state that will trigger 
+	        the graph to render with just the data for that state. 	
+		</p> 
+		In the default view we see during 2009-2010, unemployment is high and still rising, 
+		and disability is also rising, but only slightly. After 2010, unemployment 
+		significantly drops, but disability merely levels off. If the user explores on a 
+		state by state basis, they will see the same pattern. While unemployment drops, disability
+		rates do not respond equally.
+		</p> 
+		<h3>Conclusion </h3>
+		<p>
+		Keeping in mind that 2009-2015 represents the great recession, economic times unprecedented since the great depression, trends since the 1980, might not hold. In fact I recently read and abstract to a more recent paper by Professor Autor, where he contends there are strong disincentives to leave disability, even in cases where it might be feasible, thus making a correlations asymmetrical. That is to say, high unemployment may encourage people to seek disability benefits, but a better economy will not be enough to get them to abandon them. This is consistent with our findings.
+	       </p> 
+	</div>
+		
+<p> </p>
+<p> <font size=5 color="blue">The End</font> </p>
+
+<!-- load the d3.js library -->    
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+<script>
+
+// Global Variables
+var sub_state;
+var f_data = [];
+var chart_data = [];
+var statearray = ["ALL"];
+var sub_state;
+var yeararray = [];
+
+// Set the dimensions of the canvas / graph
+var margin = {top: 30, right: 20, bottom: 30, left: 50},
+    width = 900 - margin.left - margin.right,
+    height = 405 - margin.top - margin.bottom;
+
+// Parse the date / time
+var parseDate = d3.time.format("%Y").parse;
+
+// Set the ranges
+var x = d3.time.scale().range([0, width]);
+//var x = d3.scale.linear().range([0, width]).tickFormat(d3.format("d"));
+//var x = d3.scale.linear().range([0, width]);
+//console.log("x"); 		// debug
+//console.log(x);			// debug
+var y = d3.scale.linear().range([height, 0]);
+
+// Define the axes
+//var xAxis = d3.svg.axis().scale(x).orient("bottom");
+var xAxis = d3.svg.axis().scale(x)
+	//.ticks(7)
+	.orient("bottom"); 
+var yAxis = d3.svg.axis().scale(y).orient("left");
+
+// Define the lines
+var line_emp = d3.svg.line()
+    .x(function(d) { return x(d.Year); })
+    .y(function(d) { return y(d.UnemploymentRate); });
+var line_dis = d3.svg.line()
+    .x(function(d) { return x(d.Year); })
+    .y(function(d) { return y(d.DisabilityRate); });
+
+
+// Get the data
+d3.csv("js_state.csv", function(data) {
+    /* replace
+    data.forEach(function(d) {
+        d.Year = parseDate(d.Year);
+        d.UnemploymentRate = +d.UnemploymentRate;
+    });
+    */ 
+    return {
+	    State: data.State,
+	    StateCode: data.StateCode,
+	    Year: data.Year,
+	    //Year: new Date(data.Year).getFullYear(),
+        //Year: parseDate(d.Year);
+	    DisabledWorkers: +data["DisabledWorkers"],
+	    TotalLabor: +data["TotalLabor"],
+	    UnemploymentRate: +data["UnemploymentRate"],
+	    Unemployed: +data["Unemployed"],
+	    DisabilityRate: +data["DisabilityRate"]
+    };
+}, function(data) { 		// scope ends at the script end
+   f_data = data 
+    //console.log("data loaded");
+    //console.log(data);
+    //console.log(data.State);   // var bottom = data.organizations.map(function(d) { return d.member; });
+
+		// ------------------- Build selections
+	for(i = 0; i < f_data.length; i++) { 
+		//if(yeararray.indexOf(f_data[i]["Year"]) === -1){
+		if(yeararray.indexOf(f_data[i]["Year"]) == -1){
+	   		yeararray.push(f_data[i]["Year"]);
+			//console.log(f_data[i]["Year"]);
+		}	
+	};
+	//console.log("yeararray: " + yeararray); 			// debug
+	//console.log("size: " + yeararray.length);			// debug
+	
+	for(i = 0; i < f_data.length; i++) { 
+		if(statearray.indexOf(f_data[i]["State"]) === -1){
+	   		statearray.push(f_data[i]["State"]);
+		}	
+	};
+    //console.log("states: " + statearray); // debug
+
+		// ------------------- Build selections continued
+	var dataNested = d3.nest()
+	  .key(function (d) { return d; })
+	  .entries(statearray);
+	
+	d3.select('body').append('div')
+	  .append('select')
+	    .on('change',onchange)
+	  .selectAll('option')
+	  .data(dataNested)
+	  .enter()
+	  .append('option')
+	    .attr('value',function (d) { return d.key })
+	    .text(function (d) { return d.key })
+	
+	//console.log(sub_state); // debug
+	//console.log(f_data[0]); // debug
+	 	// End build selections
+    
+	// Adds the svg canvas
+	var svg = d3.select("body")
+	    .append("svg")
+	        .attr("width", width + margin.left + margin.right)
+	        .attr("height", height + margin.top + margin.bottom)
+	    .append("g")
+	        .attr("transform", 
+	              "translate(" + margin.left + "," + margin.top + ")");
+
+	function onchange() {
+		sub_state = d3.select('select').property('value')
+		if (sub_state == "ALL") {		
+	    	f_data = data;
+		} else {
+	    	f_data = data.filter(function(d){ return d["State"] == sub_state; });
+		}
+		//console.log(sub_state); // debug
+	    //console.log(f_data[0]);    // debug
+	    //console.log(f_data[0]["StateCode"]);    // debug
+		//console.log(f_data.length); // debug
+		render_chart();
+	};
+
+
+	// -------------------- Create data to chart
+	function fill_chart_data() {
+		chart_data = [];
+		//console.log(yeararray.length); // debug
+		for(j = 0; j < yeararray.length; j++) {
+			yeartotal_dis = 0;
+			yeartotal_emp = 0;
+			yearcount = 0;
+		    //console.log(f_data.length); // debug
+			for(i = 0; i < f_data.length; i++) { 
+				if (f_data[i]["Year"]  == yeararray[j]) {
+					yeartotal_emp += f_data[i]["UnemploymentRate"] 
+					yeartotal_dis += f_data[i]["DisabilityRate"] 
+					yearcount++;
+				}	
+			}
+			emp_mean = yeartotal_emp / yearcount
+			dis_mean = yeartotal_dis / yearcount
+			record = {Year: new Date(yeararray[j].toString()), UnemploymentRate: emp_mean, DisabilityRate: dis_mean};
+			//console.log("pushing"); 		// debug
+			chart_data.push(record);
+		}	
+		//console.log("1");	// debug
+		//console.log(chart_data);	// debug
+		//console.log(chart_data[chart_data.length - 1]);	// debug
+	}
+
+	// -------------------- End Create objects to chart
+	
+	// ****************** the render part *********************************
+
+	function render_chart() {	
+   		fill_chart_data();
+		//console.log("2");		// debug
+		//console.log(chart_data[0]);		// debug
+		//console.log(chart_data[chart_data.length - 1]);		// debug
+	
+	    // Scale the range of the data
+	    //x.domain(d3.extent(chart_data, function(d) { return d.Year; }));
+	    //y.domain([0, d3.max(chart_data, function(d) { return d.UnemploymentRate; })]);
+	    x.domain([new Date("2008"), new Date("2016")]);
+	    y.domain([0, d3.max(chart_data, function(d) { return Math.max(d.UnemploymentRate, d.DisabilityRate ); })]);
+	    //console.log(data[0]);
+	
+	    // Add the line_emp path.
+		svg.select("#e_line").remove();
+	    svg.append("path")
+	        .attr("class", "line")
+			.attr("id", "e_line")
+			.style("stroke", "green")
+	        .attr("d", line_emp(chart_data));
+		svg.select("#e_text").remove();
+		svg.append("text")
+			.attr("transform", "translate(" + (width-100) + "," + y(chart_data[chart_data.length - 1].UnemploymentRate) + ")")
+			.attr("id", "e_text")
+			.attr("dy", ".35em")
+			.attr("text-anchor", "start")
+			.style("fill", "green")
+			.text("Unemployment Rate");
+	
+	    // Add the line_dis path.
+		svg.select("#d_line").remove();
+	    svg.append("path")
+	        .attr("class", "line")
+			.attr("id", "d_line")
+			.style("stroke", "red")
+	        .attr("d", line_dis(chart_data));
+		svg.select("#d_text").remove();
+		svg.append("text")
+			.attr("transform", "translate(" + (width-100) + "," + y(chart_data[chart_data.length - 1].DisabilityRate) + ")")
+			.attr("dy", ".35em")
+			.attr("id", "d_text")
+			.attr("text-anchor", "start")
+			.style("fill", "red")
+			.text("Disability Rate");
+	
+	    // Add the X Axis
+		svg.selectAll("#tempx").remove();
+	    svg.append("g")
+	        .attr("class", "x axis")
+			.attr("id", "tempx")
+	        .attr("transform", "translate(0," + height + ")")
+	        .call(xAxis)
+	       .append("text")
+		      .attr("class", "label")
+		      .attr("x", width)
+		      .attr("y", -6)
+		      .style("text-anchor", "end")
+		      .text("Year (As of End of Year)");
+		
+
+	
+	    // Add the Y Axis
+		svg.selectAll("#tempy").remove();
+	    svg.append("g")
+	        	.attr("class", "y axis")
+				.attr("id", "tempy")
+	        	.call(yAxis)
+		    .append("text")
+		      .attr("class", "label")
+		      .attr("transform", "rotate(-90)")
+		      .attr("y", 6)
+		      .attr("dy", ".71em")
+		      .style("text-anchor", "end")
+		      .text("% of Total Labor Force");
+
+
+	}
+	render_chart();
+});
+
+</script>
+</body>
+</html>
